@@ -1,0 +1,10 @@
+vcd_trace_subproject_deps = \
+
+vcd_trace_install_prog_srcs = \
+
+
+vcd_trace_hdrs = \
+	cpp_vcd_tracer/src/vcd_tracer.hpp
+
+vcd_trace_srcs = \
+	vcd_trace.cc

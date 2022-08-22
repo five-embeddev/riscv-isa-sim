@@ -3,7 +3,10 @@
 #include "processor.h"
 
 clint_t::clint_t(std::vector<processor_t*>& procs, uint64_t freq_hz, bool real_time)
-  : procs(procs), freq_hz(freq_hz), real_time(real_time), mtime(0), mtimecmp(procs.size())
+  : procs(procs), freq_hz(freq_hz), real_time(real_time), mtime(0), mtimecmp(procs.size()), 
+    trace_mtimecmp(procs.size()), 
+    trace_mti(procs.size()),
+    trace_msi(procs.size())
 {
   struct timeval base;
 
@@ -32,11 +35,13 @@ bool clint_t::load(reg_t addr, size_t len, uint8_t* bytes)
   increment(0);
   if (addr >= MSIP_BASE && addr + len <= MSIP_BASE + procs.size()*sizeof(msip_t)) {
     std::vector<msip_t> msip(procs.size());
-    for (size_t i = 0; i < procs.size(); ++i)
+    for (size_t i = 0; i < procs.size(); ++i) {
       msip[i] = !!(procs[i]->state.mip->read() & MIP_MSIP);
+    }
     memcpy(bytes, (uint8_t*)&msip[0] + addr - MSIP_BASE, len);
   } else if (addr >= MTIMECMP_BASE && addr + len <= MTIMECMP_BASE + procs.size()*sizeof(mtimecmp_t)) {
-    memcpy(bytes, (uint8_t*)&mtimecmp[0] + addr - MTIMECMP_BASE, len);
+      const reg_t addr_offset = addr - MTIMECMP_BASE;
+      memcpy(bytes, (uint8_t*)&mtimecmp[0] + addr_offset, len);
   } else if (addr >= MTIME_BASE && addr + len <= MTIME_BASE + sizeof(mtime_t)) {
     memcpy(bytes, (uint8_t*)&mtime + addr - MTIME_BASE, len);
   } else {
@@ -55,13 +60,21 @@ bool clint_t::store(reg_t addr, size_t len, const uint8_t* bytes)
     for (size_t i = 0; i < procs.size(); ++i) {
       if (!(mask[i] & 0xFF)) continue;
       procs[i]->state.mip->backdoor_write_with_mask(MIP_MSIP, 0);
-      if (!!(msip[i] & 1))
-        procs[i]->state.mip->backdoor_write_with_mask(MIP_MSIP, MIP_MSIP);
+      if (!!(msip[i] & 1)) {
+          procs[i]->state.mip->backdoor_write_with_mask(MIP_MSIP, MIP_MSIP);
+          trace_msi[i].set( true);
+      } else {
+          trace_msi[i].set( false);
+      }
     }
   } else if (addr >= MTIMECMP_BASE && addr + len <= MTIMECMP_BASE + procs.size()*sizeof(mtimecmp_t)) {
-    memcpy((uint8_t*)&mtimecmp[0] + addr - MTIMECMP_BASE, bytes, len);
+      const reg_t addr_offset = addr - MTIMECMP_BASE;
+      const unsigned int i = addr_offset/sizeof(mtimecmp_t);
+      memcpy((uint8_t*)&mtimecmp[0] + addr_offset, bytes, len);
+      trace_mtimecmp[i].set( mtimecmp[i]);
   } else if (addr >= MTIME_BASE && addr + len <= MTIME_BASE + sizeof(mtime_t)) {
-    memcpy((uint8_t*)&mtime + addr - MTIME_BASE, bytes, len);
+      memcpy((uint8_t*)&mtime + addr - MTIME_BASE, bytes, len);
+      trace_mtime.set( mtime);
   } else {
     return false;
   }
@@ -81,9 +94,23 @@ void clint_t::increment(reg_t inc)
   } else {
     mtime += inc;
   }
+  trace_mtime.set(mtime);
   for (size_t i = 0; i < procs.size(); i++) {
     procs[i]->state.mip->backdoor_write_with_mask(MIP_MTIP, 0);
-    if (mtime >= mtimecmp[i])
-      procs[i]->state.mip->backdoor_write_with_mask(MIP_MTIP, MIP_MTIP);
+    if (mtime >= mtimecmp[i]) {
+        procs[i]->state.mip->backdoor_write_with_mask(MIP_MTIP, MIP_MTIP);
+        trace_mti[i].set(true);
+    } else {
+        trace_mti[i].set(false);
+    }
   }
+}
+
+void clint_t::elaborate(vcd_tracer::module &vcd_log) {
+    vcd_tracer::module clint_log(vcd_log, "clint");
+    clint_log.elaborate(trace_mtime, "mtime");
+    for (size_t i = 0; i < procs.size(); ++i) {
+        const std::string i_str(std::to_string(i));
+        clint_log.elaborate(trace_mtimecmp[i], std::string("mtimecmp")+i_str);
+    }
 }

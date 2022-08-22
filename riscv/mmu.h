@@ -89,41 +89,45 @@ public:
   }
 
 #ifndef RISCV_ENABLE_COMMITLOG
-# define READ_MEM(addr, size) ({})
+# define READ_MEM(addr, value, size)                       \
+    proc->state.trace_bus.mem_read(addr, value, size);
 #else
-# define READ_MEM(addr, size) \
-  proc->state.log_mem_read.push_back(std::make_tuple(addr, 0, size));
+# define READ_MEM(addr, value, size)                                           \
+    proc->state.trace_bus.mem_read(addr, value, size);                      \
+    proc->state.log_mem_read.push_back(std::make_tuple(addr, value, size));
 #endif
 
-  // template for functions that load an aligned value from memory
-  #define load_func(type, prefix, xlate_flags) \
+    // template for functions that load an aligned value from memory
+#define load_func(type, prefix, xlate_flags)                            \
     inline type##_t prefix##_##type(reg_t addr, bool require_alignment = false) { \
-      if (unlikely(addr & (sizeof(type##_t)-1))) { \
-        if (require_alignment) load_reserved_address_misaligned(addr); \
-        else return misaligned_load(addr, sizeof(type##_t), xlate_flags); \
-      } \
-      reg_t vpn = addr >> PGSHIFT; \
-      size_t size = sizeof(type##_t); \
-      if ((xlate_flags) == 0 && likely(tlb_load_tag[vpn % TLB_ENTRIES] == vpn)) { \
-        if (proc) READ_MEM(addr, size); \
-        return from_target(*(target_endian<type##_t>*)(tlb_data[vpn % TLB_ENTRIES].host_offset + addr)); \
-      } \
+        if (unlikely(addr & (sizeof(type##_t)-1))) {                    \
+            if (require_alignment) load_reserved_address_misaligned(addr); \
+            else return misaligned_load(addr, sizeof(type##_t), xlate_flags); \
+        }                                                               \
+        reg_t vpn = addr >> PGSHIFT;                                    \
+        size_t size = sizeof(type##_t);                                 \
+        if ((xlate_flags) == 0 && likely(tlb_load_tag[vpn % TLB_ENTRIES] == vpn)) { \
+            auto rd_value = from_target(*(target_endian<type##_t>*)(tlb_data[vpn % TLB_ENTRIES].host_offset + addr)); \
+            if (proc) READ_MEM(addr, rd_value, size);                   \
+            return rd_value;                                            \
+        }                                                               \
       if ((xlate_flags) == 0 && unlikely(tlb_load_tag[vpn % TLB_ENTRIES] == (vpn | TLB_CHECK_TRIGGERS))) { \
-        type##_t data = from_target(*(target_endian<type##_t>*)(tlb_data[vpn % TLB_ENTRIES].host_offset + addr)); \
-        if (!matched_trigger) { \
-          matched_trigger = trigger_exception(OPERATION_LOAD, addr, data); \
-          if (matched_trigger) \
-            throw *matched_trigger; \
-        } \
-        if (proc) READ_MEM(addr, size); \
-        return data; \
-      } \
-      target_endian<type##_t> res; \
+          type##_t data = from_target(*(target_endian<type##_t>*)(tlb_data[vpn % TLB_ENTRIES].host_offset + addr)); \
+          if (!matched_trigger) {                                       \
+              matched_trigger = trigger_exception(OPERATION_LOAD, addr, data); \
+              if (matched_trigger)                                      \
+                  throw *matched_trigger;                               \
+          }                                                             \
+          if (proc) READ_MEM(addr, data, size);                         \
+          return data;                                                  \
+      }                                                                 \
+      target_endian<type##_t> res;                                      \
       load_slow_path(addr, sizeof(type##_t), (uint8_t*)&res, (xlate_flags)); \
-      if (proc) READ_MEM(addr, size); \
-      return from_target(res); \
+      auto rd_value = from_target(res);                                 \
+      if (proc) READ_MEM(addr, rd_value, size);                         \
+      return rd_value;                                                  \
     }
-
+    
   // load value from memory at aligned address; zero extend to register width
   load_func(uint8, load, 0)
   load_func(uint16, load, 0)
@@ -151,37 +155,39 @@ public:
   load_func(int64, guest_load, RISCV_XLATE_VIRT)
 
 #ifndef RISCV_ENABLE_COMMITLOG
-# define WRITE_MEM(addr, value, size) ({})
+# define WRITE_MEM(addr, value, size) \
+  proc->state.trace_bus.mem_write(addr, val, size);
 #else
-# define WRITE_MEM(addr, val, size) \
+# define WRITE_MEM(addr, val, size)                                     \
+  proc->state.trace_bus.mem_write(addr, val, size);                     \
   proc->state.log_mem_write.push_back(std::make_tuple(addr, val, size));
 #endif
 
   // template for functions that store an aligned value to memory
-  #define store_func(type, prefix, xlate_flags) \
-    void prefix##_##type(reg_t addr, type##_t val) { \
-      if (unlikely(addr & (sizeof(type##_t)-1))) \
-        return misaligned_store(addr, val, sizeof(type##_t), xlate_flags); \
-      reg_t vpn = addr >> PGSHIFT; \
-      size_t size = sizeof(type##_t); \
+#define store_func(type, prefix, xlate_flags)                           \
+  void prefix##_##type(reg_t addr, type##_t val) {                      \
+      if (unlikely(addr & (sizeof(type##_t)-1)))                        \
+          return misaligned_store(addr, val, sizeof(type##_t), xlate_flags); \
+      reg_t vpn = addr >> PGSHIFT;                                      \
+      size_t size = sizeof(type##_t);                                   \
       if ((xlate_flags) == 0 && likely(tlb_store_tag[vpn % TLB_ENTRIES] == vpn)) { \
-        if (proc) WRITE_MEM(addr, val, size); \
-        *(target_endian<type##_t>*)(tlb_data[vpn % TLB_ENTRIES].host_offset + addr) = to_target(val); \
-      } \
+          if (proc) WRITE_MEM(addr, val, size);                         \
+          *(target_endian<type##_t>*)(tlb_data[vpn % TLB_ENTRIES].host_offset + addr) = to_target(val); \
+      }                                                                 \
       else if ((xlate_flags) == 0 && unlikely(tlb_store_tag[vpn % TLB_ENTRIES] == (vpn | TLB_CHECK_TRIGGERS))) { \
-        if (!matched_trigger) { \
-          matched_trigger = trigger_exception(OPERATION_STORE, addr, val); \
-          if (matched_trigger) \
-            throw *matched_trigger; \
-        } \
-        if (proc) WRITE_MEM(addr, val, size); \
-        *(target_endian<type##_t>*)(tlb_data[vpn % TLB_ENTRIES].host_offset + addr) = to_target(val); \
-      } \
-      else { \
-        target_endian<type##_t> target_val = to_target(val); \
-        store_slow_path(addr, sizeof(type##_t), (const uint8_t*)&target_val, (xlate_flags)); \
-        if (proc) WRITE_MEM(addr, val, size); \
-      } \
+          if (!matched_trigger) {                                       \
+              matched_trigger = trigger_exception(OPERATION_STORE, addr, val); \
+              if (matched_trigger)                                      \
+                  throw *matched_trigger;                               \
+          }                                                             \
+          if (proc) WRITE_MEM(addr, val, size);                         \
+          *(target_endian<type##_t>*)(tlb_data[vpn % TLB_ENTRIES].host_offset + addr) = to_target(val); \
+      }                                                                 \
+      else {                                                            \
+          target_endian<type##_t> target_val = to_target(val);          \
+          store_slow_path(addr, sizeof(type##_t), (const uint8_t*)&target_val, (xlate_flags)); \
+          if (proc) WRITE_MEM(addr, val, size);                         \
+      }                                                                 \
   }
 
   // template for functions that perform an atomic memory operation

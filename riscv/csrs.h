@@ -9,6 +9,8 @@
 // For access_type:
 #include "memtracer.h"
 
+#include "vcd_trace.h"
+
 class processor_t;
 struct state_t;
 
@@ -36,7 +38,8 @@ class csr_t {
   virtual bool unlogged_write(const reg_t val) noexcept = 0;
 
   // Record this CSR update (which has already happened) in the commit log
-  void log_write() const noexcept;
+  void log_write() noexcept;
+  virtual void trace_update(reg_t val) noexcept;
 
   // Record a write to an alternate CSR (e.g. minstreth instead of minstret)
   void log_special_write(const reg_t address, const reg_t val) const noexcept;
@@ -52,6 +55,10 @@ class csr_t {
  private:
   const unsigned csr_priv;
   const bool csr_read_only;
+
+public:
+  vcd_tracer::sim_csr_value<reg_t> trace_value;
+  
 };
 
 typedef std::shared_ptr<csr_t> csr_t_p;
@@ -285,8 +292,13 @@ class mip_or_mie_csr_t: public csr_t {
 
   void write_with_mask(const reg_t mask, const reg_t val) noexcept;
 
+  vcd_tracer::sim_reg_value<bool> trace_mti;
+  vcd_tracer::sim_reg_value<bool> trace_msi;
+  vcd_tracer::sim_reg_value<bool> trace_mei;
+
  protected:
   virtual bool unlogged_write(const reg_t val) noexcept override final;
+  virtual void trace_update(reg_t val) noexcept;
   reg_t val;
  private:
   virtual reg_t write_mask() const noexcept = 0;

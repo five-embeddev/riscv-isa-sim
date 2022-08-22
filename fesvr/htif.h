@@ -7,6 +7,7 @@
 #include "syscall.h"
 #include "device.h"
 #include "byteorder.h"
+#include "elfloader.h"
 #include <string.h>
 #include <map>
 #include <vector>
@@ -63,7 +64,7 @@ class htif_t : public chunked_memif_t
   virtual size_t chunk_align() = 0;
   virtual size_t chunk_max_size() = 0;
 
-  virtual std::map<std::string, uint64_t> load_payload(const std::string& payload, reg_t* entry);
+  virtual std::map<std::string, elf_symbol_t> load_payload(const std::string& payload, reg_t* entry);
   virtual void load_program();
   virtual void idle() {}
 
@@ -77,6 +78,7 @@ class htif_t : public chunked_memif_t
 
   // Given an address, return symbol from addr2symbol map
   const char* get_symbol(uint64_t addr);
+  elf_symbol_t get_addr(const std::string &name );
 
  private:
   void parse_arguments(int argc, char ** argv);
@@ -106,6 +108,7 @@ class htif_t : public chunked_memif_t
   const std::vector<std::string>& target_args() { return targs; }
 
   std::map<uint64_t, std::string> addr2symbol;
+  std::map<std::string, elf_symbol_t> symbols;
 
   friend class memif_t;
   friend class syscall_t;

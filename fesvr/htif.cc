@@ -86,7 +86,7 @@ void htif_t::start()
   reset();
 }
 
-std::map<std::string, uint64_t> htif_t::load_payload(const std::string& payload, reg_t* entry)
+std::map<std::string, elf_symbol_t> htif_t::load_payload(const std::string& payload, reg_t* entry)
 {
   std::string path;
   if (access(payload.c_str(), F_OK) == 0)
@@ -124,11 +124,11 @@ std::map<std::string, uint64_t> htif_t::load_payload(const std::string& payload,
 
 void htif_t::load_program()
 {
-  std::map<std::string, uint64_t> symbols = load_payload(targs[0], &entry);
+  symbols = load_payload(targs[0], &entry);
 
   if (symbols.count("tohost") && symbols.count("fromhost")) {
-    tohost_addr = symbols["tohost"];
-    fromhost_addr = symbols["fromhost"];
+    tohost_addr = symbols["tohost"].addr;
+    fromhost_addr = symbols["fromhost"].addr;
   } else {
     fprintf(stderr, "warning: tohost and fromhost symbols not in ELF; can't communicate with target\n");
   }
@@ -136,8 +136,8 @@ void htif_t::load_program()
   // detect torture tests so we can print the memory signature at the end
   if (symbols.count("begin_signature") && symbols.count("end_signature"))
   {
-    sig_addr = symbols["begin_signature"];
-    sig_len = symbols["end_signature"] - sig_addr;
+    sig_addr = symbols["begin_signature"].addr;
+    sig_len = symbols["end_signature"].addr - sig_addr;
   }
 
   for (auto payload : payloads)
@@ -148,9 +148,9 @@ void htif_t::load_program()
 
    for (auto i : symbols)
    {
-     auto it = addr2symbol.find(i.second);
+     auto it = addr2symbol.find(i.second.addr);
      if ( it == addr2symbol.end())
-       addr2symbol[i.second] = i.first;
+       addr2symbol[i.second.addr] = i.first;
    }
 
    return;
@@ -165,6 +165,17 @@ const char* htif_t::get_symbol(uint64_t addr)
 
   return it->second.c_str();
 }
+
+elf_symbol_t htif_t::get_addr(const std::string &name ) {
+
+    auto it = symbols.find(name);
+    if (it == symbols.end()) {
+        return {0,0};
+    } else {
+        return it->second;
+    }
+}
+
 
 void htif_t::stop()
 {

@@ -1,8 +1,5 @@
 // See LICENSE for license details.
 
-#include "elf.h"
-#include "memif.h"
-#include "byteorder.h"
 #include <cstring>
 #include <string>
 #include <sys/stat.h>
@@ -16,7 +13,13 @@
 #include <vector>
 #include <map>
 
-std::map<std::string, uint64_t> load_elf(const char* fn, memif_t* memif, reg_t* entry)
+#include "memif.h"
+#include "elfloader.h"
+#include "byteorder.h"
+
+#include "elf.h"
+
+std::map<std::string, elf_symbol_t> load_elf(const char* fn, memif_t* memif, reg_t* entry)
 {
   int fd = open(fn, O_RDONLY);
   struct stat s;
@@ -38,7 +41,7 @@ std::map<std::string, uint64_t> load_elf(const char* fn, memif_t* memif, reg_t* 
   assert(IS_ELF_VCURRENT(*eh64));
 
   std::vector<uint8_t> zeros;
-  std::map<std::string, uint64_t> symbols;
+  std::map<std::string, elf_symbol_t> symbols;
 
 #define LOAD_ELF(ehdr_t, phdr_t, shdr_t, sym_t, bswap)                         \
   do {                                                                         \
@@ -88,7 +91,7 @@ std::map<std::string, uint64_t> load_elf(const char* fn, memif_t* memif, reg_t* 
             bswap(sh[strtabidx].sh_size) - bswap(sym[i].st_name);              \
         assert(bswap(sym[i].st_name) < bswap(sh[strtabidx].sh_size));          \
         assert(strnlen(strtab + bswap(sym[i].st_name), max_len) < max_len);    \
-        symbols[strtab + bswap(sym[i].st_name)] = bswap(sym[i].st_value);      \
+        symbols[strtab + bswap(sym[i].st_name)] = {bswap(sym[i].st_value), bswap(sym[i].st_size)};      \
       }                                                                        \
     }                                                                          \
   } while (0)

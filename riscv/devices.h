@@ -58,6 +58,7 @@ class clint_t : public abstract_device_t {
   bool store(reg_t addr, size_t len, const uint8_t* bytes);
   size_t size() { return CLINT_SIZE; }
   void increment(reg_t inc);
+  void elaborate(vcd_tracer::module &vcd_log);
  private:
   typedef uint64_t mtime_t;
   typedef uint64_t mtimecmp_t;
@@ -69,6 +70,14 @@ class clint_t : public abstract_device_t {
   uint64_t real_time_ref_usecs;
   mtime_t mtime;
   std::vector<mtimecmp_t> mtimecmp;
+
+  vcd_tracer::sim_pc_value<mtime_t> trace_mtime;
+  std::vector<vcd_tracer::sim_reg_value<mtimecmp_t>> trace_mtimecmp;
+  std::vector<vcd_tracer::sim_reg_value<bool>> trace_mti;
+  std::vector<vcd_tracer::sim_reg_value<bool>> trace_msi;
+  std::vector<vcd_tracer::sim_reg_value<bool>> trace_mei;
+
+  
 };
 
 class mmio_plugin_device_t : public abstract_device_t {

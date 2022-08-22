@@ -23,10 +23,98 @@
 #undef STATE
 #define STATE state
 
+void state_t::elaborate(vcd_tracer::module &vcd_log_in) {
+    vcd_tracer::module processor_log(vcd_log_in, "processor");
+    processor_log.elaborate(trace_pc, "pc");
+    processor_log.elaborate(trace_jump_pc, "jump_pc");
+    processor_log.elaborate(trace_insn, "insn");
+    processor_log.elaborate(trace_wfi, "wfi");
+    for (unsigned int i = 0; i< NXPR; i++) {
+          std::ostringstream name;
+          name << "x" << i;
+          processor_log.elaborate(XPR.trace[i], name.str());
+    }
+    for (unsigned int i = 0; i< NFPR; i++) {
+        std::ostringstream name;
+        name << "f" << i;
+        processor_log.elaborate(FPR.trace[i], name.str());
+    }
+
+    vcd_tracer::module bus_log(vcd_log_in, "bus");
+    bus_log.elaborate(trace_bus.trace_addr, "addr");
+    bus_log.elaborate(trace_bus.trace_wr_data, "wr_data");
+    bus_log.elaborate(trace_bus.trace_rd_data, "rd_data");
+    bus_log.elaborate(trace_bus.wr_strobe, "wr_strobe");
+    bus_log.elaborate(trace_bus.rd_strobe, "rd_strobe");
+    bus_log.elaborate(trace_bus.trace_size, "size");
+
+  vcd_tracer::module csr_log(vcd_log_in, "csrs");
+
+  csr_log.elaborate(misa->trace_value, "misa");
+  csr_log.elaborate(mstatus->trace_value, "mstatus");
+  csr_log.elaborate(mepc->trace_value, "mepc");
+  csr_log.elaborate(mtval->trace_value, "mtval");
+  csr_log.elaborate(mtvec->trace_value, "mtvec");
+  csr_log.elaborate(mcause->trace_value, "mcause");
+  csr_log.elaborate(minstret->trace_value, "minstret");
+  csr_log.elaborate(mie->trace_value, "mie");
+  csr_log.elaborate(mip->trace_value, "mip");
+  csr_log.elaborate(medeleg->trace_value, "medeleg");
+  csr_log.elaborate(mideleg->trace_value, "mideleg");
+  csr_log.elaborate(mcounteren->trace_value, "mcounteren");
+  csr_log.elaborate(scounteren->trace_value, "scounteren");
+  csr_log.elaborate(sepc->trace_value, "sepc");
+  csr_log.elaborate(stval->trace_value, "stval");
+  csr_log.elaborate(stvec->trace_value, "stvec");
+  csr_log.elaborate(satp->trace_value, "satp");
+  csr_log.elaborate(scause->trace_value, "scause");
+  csr_log.elaborate(mtval2->trace_value, "mtval2");
+  csr_log.elaborate(mtinst->trace_value, "mtinst");
+  csr_log.elaborate(hstatus->trace_value, "hstatus");
+  csr_log.elaborate(hideleg->trace_value, "hideleg");
+  csr_log.elaborate(hedeleg->trace_value, "hedeleg");
+  csr_log.elaborate(hcounteren->trace_value, "hcounteren");
+  csr_log.elaborate(htval->trace_value, "htval");
+  csr_log.elaborate(htinst->trace_value, "htinst");
+  csr_log.elaborate(hgatp->trace_value, "hgatp");
+  csr_log.elaborate(sstatus->trace_value, "sstatus");
+  csr_log.elaborate(vsstatus->trace_value, "vsstatus");
+  csr_log.elaborate(vstvec->trace_value, "vstvec");
+  csr_log.elaborate(vsepc->trace_value, "vsepc");
+  csr_log.elaborate(vscause->trace_value, "vscause");
+  csr_log.elaborate(vstval->trace_value, "vstval");
+  csr_log.elaborate(vsatp->trace_value, "vsatp");
+  csr_log.elaborate(dpc->trace_value, "dpc");
+  csr_log.elaborate(dcsr->trace_value, "dcsr");
+  csr_log.elaborate(tselect->trace_value, "tselect");
+  for (unsigned i=0; i<num_triggers; i++ ) {
+      std::ostringstream name;
+      name << "mcontrol" << i;
+      //csr_log.elaborate(mcontrol[i].trace_value, name.str());
+  }
+  csr_log.elaborate(tdata2->trace_value, "tdata2");
+  for (unsigned i=0; i<max_pmp; i++ ) {
+      std::ostringstream name;
+      name << "pmpaddr" << i;
+      csr_log.elaborate(pmpaddr[i]->trace_value, name.str());
+  }
+  csr_log.elaborate(fflags->trace_value, "fflags");
+  csr_log.elaborate(frm->trace_value, "frm");
+
+  vcd_tracer::module clint_log(vcd_log_in, "interrupts");
+
+  clint_log.elaborate(mip->trace_mti, "mti");  
+  clint_log.elaborate(mip->trace_msi, "msi");
+  clint_log.elaborate(mip->trace_mei, "mei");
+  
+
+}
+
+
 processor_t::processor_t(const char* isa, const char* priv, const char* varch,
                          simif_t* sim, uint32_t id, bool halt_on_reset,
                          FILE* log_file, std::ostream& sout_)
-  : debug(false), halt_request(HR_NONE), sim(sim), id(id), xlen(0),
+  : state(sout_), debug(false), halt_request(HR_NONE), sim(sim), id(id), xlen(0),
   histogram_enabled(false), log_commits_enabled(false),
   log_file(log_file), sout_(sout_.rdbuf()), halt_on_reset(halt_on_reset),
   extension_table(256, false), impl_table(256, false), last_pc(1), executions(1)
@@ -70,6 +158,12 @@ processor_t::~processor_t()
   delete mmu;
   delete disassembler;
 }
+
+void processor_t::elaborate(vcd_tracer::top *vcd_top, vcd_tracer::module &vcd_scope) {
+  vcd_log = vcd_top;
+  state.elaborate(vcd_scope);
+}
+
 
 static void bad_option_string(const char *option, const char *value,
                               const char *msg)
@@ -369,7 +463,7 @@ const int state_t::num_triggers;
 
 void state_t::reset(processor_t* const proc, reg_t max_isa)
 {
-  pc = DEFAULT_RSTVEC;
+  write_pc(DEFAULT_RSTVEC);
   XPR.reset();
   FPR.reset();
 
@@ -846,8 +940,8 @@ void processor_t::enter_debug_mode(uint8_t cause)
   state.debug_mode = true;
   state.dcsr->write_cause_and_prv(cause, state.prv);
   set_privilege(PRV_M);
-  state.dpc->write(state.pc);
-  state.pc = DEBUG_ROM_ENTRY;
+  state.dpc->write(state.read_pc());
+  state.write_pc(DEBUG_ROM_ENTRY);
 }
 
 void processor_t::debug_output_log(std::stringstream *s)
@@ -876,9 +970,9 @@ void processor_t::take_trap(trap_t& t, reg_t epc)
 
   if (state.debug_mode) {
     if (t.cause() == CAUSE_BREAKPOINT) {
-      state.pc = DEBUG_ROM_ENTRY;
+      state.write_pc(DEBUG_ROM_ENTRY);
     } else {
-      state.pc = DEBUG_ROM_TVEC;
+      state.write_pc(DEBUG_ROM_TVEC);
     }
     return;
   }
@@ -907,7 +1001,7 @@ void processor_t::take_trap(trap_t& t, reg_t epc)
   if (state.prv <= PRV_S && bit < max_xlen && ((vsdeleg >> bit) & 1)) {
     // Handle the trap in VS-mode
     reg_t vector = (state.vstvec->read() & 1) && interrupt ? 4*bit : 0;
-    state.pc = (state.vstvec->read() & ~(reg_t)1) + vector;
+    state.write_pc((state.vstvec->read() & ~(reg_t)1) + vector);
     state.vscause->write((interrupt) ? (t.cause() - 1) : t.cause());
     state.vsepc->write(epc);
     state.vstval->write(t.get_tval());
@@ -922,7 +1016,7 @@ void processor_t::take_trap(trap_t& t, reg_t epc)
     // Handle the trap in HS-mode
     set_virt(false);
     reg_t vector = (state.stvec->read() & 1) && interrupt ? 4*bit : 0;
-    state.pc = (state.stvec->read() & ~(reg_t)1) + vector;
+    state.write_pc((state.stvec->read() & ~(reg_t)1) + vector);
     state.scause->write(t.cause());
     state.sepc->write(epc);
     state.stval->write(t.get_tval());
@@ -947,7 +1041,7 @@ void processor_t::take_trap(trap_t& t, reg_t epc)
     // Handle the trap in M-mode
     set_virt(false);
     reg_t vector = (state.mtvec->read() & 1) && interrupt ? 4*bit : 0;
-    state.pc = (state.mtvec->read() & ~(reg_t)1) + vector;
+    state.write_pc(  (state.mtvec->read() & ~(reg_t)1) + vector);
     state.mepc->write(epc);
     state.mcause->write(t.cause());
     state.mtval->write(t.get_tval());
@@ -968,11 +1062,11 @@ void processor_t::take_trap(trap_t& t, reg_t epc)
 void processor_t::disasm(insn_t insn)
 {
   uint64_t bits = insn.bits() & ((1ULL << (8 * insn_length(insn.bits()))) - 1);
-  if (last_pc != state.pc || last_bits != bits) {
+  if (last_pc != state.read_pc() || last_bits != bits) {
     std::stringstream s;  // first put everything in a string, later send it to output
 
 #ifdef RISCV_ENABLE_COMMITLOG
-    const char* sym = get_symbol(state.pc);
+    const char* sym = get_symbol(state.read_pc());
     if (sym != nullptr)
     {
       s << "core " << std::dec << std::setfill(' ') << std::setw(3) << id
@@ -987,12 +1081,12 @@ void processor_t::disasm(insn_t insn)
 
     s << "core " << std::dec << std::setfill(' ') << std::setw(3) << id
       << std::hex << ": 0x" << std::setfill('0') << std::setw(max_xlen/4)
-      << zext(state.pc, max_xlen) << " (0x" << std::setw(8) << bits << ") "
+      << zext(state.read_pc(), max_xlen) << " (0x" << std::setw(8) << bits << ") "
       << disassembler->disassemble(insn) << std::endl;
 
     debug_output_log(&s);
 
-    last_pc = state.pc;
+    last_pc = state.read_pc();
     last_bits = bits;
     executions = 1;
   } else {

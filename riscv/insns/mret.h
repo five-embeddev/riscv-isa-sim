@@ -1,5 +1,7 @@
 require_privilege(PRV_M);
-set_pc_and_serialize(p->get_state()->mepc->read());
+reg_t next_pc = p->get_state()->mepc->read();
+p->get_state()->trace_jump_branch_pc(next_pc, true);
+set_pc_and_serialize(next_pc);
 reg_t s = STATE.mstatus->read();
 reg_t prev_prv = get_field(s, MSTATUS_MPP);
 reg_t prev_virt = get_field(s, MSTATUS_MPV);

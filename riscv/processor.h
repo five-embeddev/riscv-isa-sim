@@ -14,6 +14,7 @@
 #include "debug_rom_defines.h"
 #include "entropy_source.h"
 #include "csrs.h"
+#include "vcd_trace.h"
 
 class processor_t;
 class mmu_t;
@@ -53,6 +54,103 @@ typedef std::unordered_map<reg_t, freg_t> commit_log_reg_t;
 
 // addr, value, size
 typedef std::vector<std::tuple<reg_t, uint64_t, uint8_t>> commit_log_mem_t;
+
+class trace_location_t {
+public:
+    trace_location_t(const std::string &name, reg_t addr, int size) 
+        : name(name)
+        , addr(addr)
+        , size(size)
+        , mask(size==sizeof(reg_t) ? -1 : ((1<<(size*8))-1))
+        {
+        }
+    void trace(std::ostream &out, reg_t wr_addr, reg_t wr_val, int wr_size) const  {
+        reg_t offset = wr_addr - addr;
+        wr_val >>= offset*8;
+        wr_val &= mask;
+        out << "TRACE: " << name << "@0x" << std::hex << addr << "= 0x" << wr_val << std::dec << "\n";
+    }
+    bool cmplt(reg_t test_addr) const {
+        return test_addr < addr;
+    }
+private:
+    std::string name;
+    reg_t addr;
+    int size;
+    reg_t mask;
+};
+
+// Trace memory access like a memory bs
+struct trace_bus_t {
+    trace_bus_t(std::ostream &sout) 
+        : sout(sout) {
+    }
+    void clear_strobe(void) {
+        if (wr_strobe_cnt > 0) {
+            wr_strobe_cnt --;
+            if (wr_strobe_cnt == 0) {
+                wr_strobe.set(false);
+            }
+        }
+        if (rd_strobe_cnt > 0) {
+            rd_strobe_cnt --;
+            if (rd_strobe_cnt == 0) {
+                rd_strobe.set(false);
+            }
+        }
+    }
+    void mem_write( reg_t addr, uint64_t val, uint8_t size) {
+        trace_addr.set(addr);
+        trace_wr_data.set(val);
+        trace_size.set(size);
+        wr_strobe.set(true);
+        wr_strobe_cnt ++;
+        auto i = std::lower_bound(_trace_vars.begin(),
+                                  _trace_vars.end(),
+                                  addr,
+                                  [](const trace_location_t &var, reg_t addr) {
+                                      return var.cmplt(addr);
+                                      
+                                  });
+        while (i!=_trace_vars.end() && (i->cmplt((addr + size)))) {
+            i->trace(sout, addr, val, size);
+            i++;
+        }
+    }
+    void mem_read( reg_t addr, uint64_t val, uint8_t size) {
+        trace_addr.set(addr);
+        trace_rd_data.set(val);
+        trace_size.set(size);
+        rd_strobe.set(true);
+        rd_strobe_cnt ++;
+    }
+    void add_trace(const std::string &name, reg_t addr, int size) {
+        auto i = std::lower_bound(_trace_vars.begin(),
+                                  _trace_vars.end(),
+                                  addr,
+                                  [](const trace_location_t &x, reg_t addr) {
+                                      return x.cmplt(addr);
+                                  });
+        _trace_vars.emplace(i, name, addr, size);
+    }
+
+    std::ostream &sout;
+    
+    vcd_tracer::sim_pc_value<reg_t> trace_addr;
+    vcd_tracer::sim_pc_value<bool> wr_strobe;
+    vcd_tracer::sim_pc_value<bool> rd_strobe;
+    vcd_tracer::sim_pc_value<uint64_t> trace_wr_data;
+    vcd_tracer::sim_pc_value<uint64_t> trace_rd_data;
+    vcd_tracer::sim_pc_value<uint8_t> trace_size;
+    
+    int wr_strobe_cnt=0;
+    int rd_strobe_cnt=0;
+
+    std::vector<trace_location_t> _trace_vars;
+
+};
+
+
 
 typedef enum
 {
@@ -158,13 +256,45 @@ struct type_sew_t<64>
 // architectural state of a RISC-V hart
 struct state_t
 {
+    state_t(std::ostream &out) 
+        : trace_bus(out) {
+    }
   void reset(processor_t* const proc, reg_t max_isa);
-
+  void elaborate(vcd_tracer::module &vcd_log);
   static const int num_triggers = 4;
+  reg_t read_pc(void) const {return pc;}
+  void trace_jump_branch_pc(reg_t new_pc, bool is_jump) {
+      if (is_jump) {
+          trace_jump_pc.set(new_pc);      
+      }
+  }
+  void trace_insn_word(const insn_t &i) {
+      trace_insn.set(i.bits());      
+  }
+  void write_pc(reg_t new_pc) {
+      pc = new_pc;
+      trace_pc.set(new_pc);
+      trace_bus.clear_strobe();
+      trace_wfi.set(false);
+  }
+  void start_wfi(void) {
+      trace_wfi.set(true);
+  }
 
+private:    
   reg_t pc;
+  vcd_tracer::sim_pc_value<reg_t> trace_pc;
+  vcd_tracer::sim_pc_value<reg_t> trace_jump_pc;
+  vcd_tracer::sim_pc_value<bool> trace_wfi;
+  vcd_tracer::sim_pc_value<insn_bits_t> trace_insn;
+
+public:
+  trace_bus_t trace_bus;
+
   regfile_t<reg_t, NXPR, true> XPR;
   regfile_t<freg_t, NFPR, false> FPR;
+  //std::array<vcd_tracer::value<reg_t>, NXPR> trace_xpr;
+  //std::array<vcd_tracer::value<reg_t>, NFPR> trace_fpr;
 
   // control and status registers
   std::unordered_map<reg_t, csr_t_p> csrmap;
@@ -296,6 +426,8 @@ public:
               simif_t* sim, uint32_t id, bool halt_on_reset,
               FILE *log_file, std::ostream& sout_); // because of command line option --log and -s we need both
   ~processor_t();
+
+  void elaborate(vcd_tracer::top *vcd_top, vcd_tracer::module &vcd_scope);
 
   void set_debug(bool value);
   void set_histogram(bool value);
@@ -492,6 +624,8 @@ private:
 
   std::vector<insn_desc_t> instructions;
   std::map<reg_t,uint64_t> pc_histogram;
+
+  vcd_tracer::top *vcd_log{nullptr};
 
   static const size_t OPCODE_CACHE_SIZE = 8191;
   insn_desc_t opcode_cache[OPCODE_CACHE_SIZE];

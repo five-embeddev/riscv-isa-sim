@@ -17,6 +17,7 @@
 #include <unistd.h>
 #include <sys/wait.h>
 #include <sys/types.h>
+#include <ios>
 
 volatile bool ctrlc_pressed = false;
 static void handle_signal(int sig)
@@ -170,6 +171,24 @@ sim_t::~sim_t()
   delete debug_mmu;
 }
 
+
+void sim_t::set_enable_vcd(std::string_view file_name) {
+    vcd_file = file_name;
+    elaborate(vcd_log.root);
+}
+
+void sim_t::elaborate(vcd_tracer::module &vcd_scope) {
+    unsigned int i=0;
+    for (auto proc : procs) {
+        std::string name("core0");
+        vcd_tracer::module core_trace(vcd_scope, name);
+        proc->elaborate(&vcd_log, core_trace);
+        i++;
+    }
+    clint->elaborate(vcd_scope);
+}
+
+
 void sim_thread_main(void* arg)
 {
   ((sim_t*)arg)->main();
@@ -180,6 +199,11 @@ void sim_t::main()
   if (!debug && log)
     set_procs_debug(true);
 
+  if (vcd_file != "") {      
+      vcd_out.open(vcd_file.c_str(), std::ios_base::out);
+      vcd_log.finalize_header(vcd_out, std::chrono::system_clock::now());
+  }
+
   while (!done())
   {
     if (debug || ctrlc_pressed)
@@ -189,13 +213,23 @@ void sim_t::main()
     if (remote_bitbang) {
       remote_bitbang->tick();
     }
+    if ((end_cycle != 0) && (total_steps > end_cycle)) {
+        std::cerr << "Max Cycles Met, exiting: " << end_cycle << "\n";
+        break;
+    }
+  }
+
+  if (vcd_file != "") {      
+      vcd_log.finalize_trace(vcd_out);
+      vcd_out.close();
   }
 }
+
 
 int sim_t::run()
 {
   host = context_t::current();
-  target.init(sim_thread_main, this);
+  target.init(sim_thread_main, this);  
   return htif_t::run();
 }
 
@@ -218,6 +252,8 @@ void sim_t::step(size_t n)
 
       host->switch_to();
     }
+    total_steps +=  steps;
+    vcd_log.time_update_abs(vcd_out, std::chrono::nanoseconds{total_steps});
   }
 }
 

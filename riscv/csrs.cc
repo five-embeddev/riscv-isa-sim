@@ -55,8 +55,14 @@ void csr_t::write(const reg_t val) noexcept {
   }
 }
 
-void csr_t::log_write() const noexcept {
-  log_special_write(address, written_value());
+void csr_t::log_write()  noexcept {
+  const reg_t val = written_value();
+  this->trace_update(val);
+  log_special_write(address, val);
+}
+
+void csr_t::trace_update(const reg_t val) noexcept {
+    trace_value.set(val);
 }
 
 void csr_t::log_special_write(const reg_t address, const reg_t val) const noexcept {
@@ -81,6 +87,7 @@ reg_t basic_csr_t::read() const noexcept {
 
 bool basic_csr_t::unlogged_write(const reg_t val) noexcept {
   this->val = val;
+  this->trace_update(this->val);
   return true;
 }
 
@@ -128,6 +135,7 @@ bool pmpaddr_csr_t::unlogged_write(const reg_t val) noexcept {
   else
     return false;
   proc->get_mmu()->flush_tlb();
+  this->trace_update(this->val);
   return true;
 }
 
@@ -271,6 +279,7 @@ reg_t epc_csr_t::read() const noexcept {
 
 bool epc_csr_t::unlogged_write(const reg_t val) noexcept {
   this->val = val & ~(reg_t)1;
+  this->trace_update(this->val);
   return true;
 }
 
@@ -289,6 +298,7 @@ reg_t tvec_csr_t::read() const noexcept {
 
 bool tvec_csr_t::unlogged_write(const reg_t val) noexcept {
   this->val = val & ~(reg_t)2;
+  this->trace_update(this->val);
   return true;
 }
 
@@ -392,6 +402,7 @@ bool vsstatus_csr_t::unlogged_write(const reg_t val) noexcept {
   const reg_t newval = (this->val & ~sstatus_write_mask) | (val & sstatus_write_mask);
   if (state->v) maybe_flush_tlb(newval);
   this->val = adjust_sd(newval);
+  this->trace_update(this->val);
   return true;
 }
 
@@ -450,6 +461,7 @@ bool mstatus_csr_t::unlogged_write(const reg_t val) noexcept {
   const reg_t new_mstatus = (read() & ~mask) | (adjusted_val & mask);
   maybe_flush_tlb(new_mstatus);
   this->val = adjust_sd(new_mstatus);
+  this->trace_update(this->val);
   return true;
 }
 
@@ -512,7 +524,7 @@ misa_csr_t::misa_csr_t(processor_t* const proc, const reg_t addr, const reg_t ma
 
 bool misa_csr_t::unlogged_write(const reg_t val) noexcept {
   // the write is ignored if increasing IALIGN would misalign the PC
-  if (!(val & (1L << ('C' - 'A'))) && (state->pc & 2))
+  if (!(val & (1L << ('C' - 'A'))) && (state->read_pc() & 2))
     return false;
 
   const bool val_supports_f = val & (1L << ('F' - 'A'));
@@ -574,6 +586,14 @@ bool mip_or_mie_csr_t::unlogged_write(const reg_t val) noexcept {
   return false; // avoid double logging: already logged by write_with_mask()
 }
 
+void mip_or_mie_csr_t::trace_update(const reg_t val) noexcept {
+    csr_t::trace_update(val);
+    trace_mti.set((val & MIP_MTIP)!=0);
+    trace_msi.set((val & MIP_MSIP)!=0);
+    bool mei_flag = (val & MIP_MEIP)!=0;
+    std::cerr << "MEI = " << mei_flag << "\n";
+    trace_mei.set(mei_flag);
+}
 
 mip_csr_t::mip_csr_t(processor_t* const proc, const reg_t addr):
   mip_or_mie_csr_t(proc, addr) {
@@ -581,6 +601,7 @@ mip_csr_t::mip_csr_t(processor_t* const proc, const reg_t addr):
 
 void mip_csr_t::backdoor_write_with_mask(const reg_t mask, const reg_t val) noexcept {
   this->val = (this->val & ~mask) | (val & mask);
+  this->trace_update(this->val);
 }
 
 reg_t mip_csr_t::write_mask() const noexcept {
@@ -857,6 +878,7 @@ bool minstret_csr_t::unlogged_write(const reg_t val) noexcept {
   // unconditionally increments instret after executing an instruction.
   // Correct for this artifact by decrementing instret here.
   this->val--;
+  this->trace_update(this->val);
   return true;
 }
 

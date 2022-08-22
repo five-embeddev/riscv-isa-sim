@@ -18,6 +18,8 @@
 #include "specialize.h"
 #include <cinttypes>
 
+#include "vcd_trace.h"
+
 typedef int64_t sreg_t;
 typedef uint64_t reg_t;
 
@@ -78,72 +80,72 @@ class insn_t
 public:
   insn_t() = default;
   insn_t(insn_bits_t bits) : b(bits) {}
-  insn_bits_t bits() { return b & ~((UINT64_MAX) << (length() * 8)); }
-  int length() { return insn_length(b); }
-  int64_t i_imm() { return int64_t(b) >> 20; }
-  int64_t shamt() { return x(20, 6); }
-  int64_t s_imm() { return x(7, 5) + (xs(25, 7) << 5); }
-  int64_t sb_imm() { return (x(8, 4) << 1) + (x(25,6) << 5) + (x(7,1) << 11) + (imm_sign() << 12); }
-  int64_t u_imm() { return int64_t(b) >> 12 << 12; }
-  int64_t uj_imm() { return (x(21, 10) << 1) + (x(20, 1) << 11) + (x(12, 8) << 12) + (imm_sign() << 20); }
-  uint64_t rd() { return x(7, 5); }
-  uint64_t rs1() { return x(15, 5); }
-  uint64_t rs2() { return x(20, 5); }
-  uint64_t rs3() { return x(27, 5); }
-  uint64_t rm() { return x(12, 3); }
-  uint64_t csr() { return x(20, 12); }
-  uint64_t iorw() { return x(20, 8); }
+  insn_bits_t bits() const { return b & ~((UINT64_MAX) << (length() * 8)); }
+  int length() const { return insn_length(b); }
+  int64_t i_imm() const { return int64_t(b) >> 20; }
+  int64_t shamt() const { return x(20, 6); }
+  int64_t s_imm() const { return x(7, 5) + (xs(25, 7) << 5); }
+  int64_t sb_imm() const { return (x(8, 4) << 1) + (x(25,6) << 5) + (x(7,1) << 11) + (imm_sign() << 12); }
+  int64_t u_imm() const { return int64_t(b) >> 12 << 12; }
+  int64_t uj_imm() const { return (x(21, 10) << 1) + (x(20, 1) << 11) + (x(12, 8) << 12) + (imm_sign() << 20); }
+  uint64_t rd() const { return x(7, 5); }
+  uint64_t rs1() const { return x(15, 5); }
+  uint64_t rs2() const { return x(20, 5); }
+  uint64_t rs3() const { return x(27, 5); }
+  uint64_t rm() const { return x(12, 3); }
+  uint64_t csr() const { return x(20, 12); }
+  uint64_t iorw() const { return x(20, 8); }
   uint64_t bs  () {return x(30,2);} // Crypto ISE - SM4/AES32 byte select.
   uint64_t rcon() {return x(20,4);} // Crypto ISE - AES64 round const.
 
-  int64_t rvc_imm() { return x(2, 5) + (xs(12, 1) << 5); }
-  int64_t rvc_zimm() { return x(2, 5) + (x(12, 1) << 5); }
-  int64_t rvc_addi4spn_imm() { return (x(6, 1) << 2) + (x(5, 1) << 3) + (x(11, 2) << 4) + (x(7, 4) << 6); }
-  int64_t rvc_addi16sp_imm() { return (x(6, 1) << 4) + (x(2, 1) << 5) + (x(5, 1) << 6) + (x(3, 2) << 7) + (xs(12, 1) << 9); }
-  int64_t rvc_lwsp_imm() { return (x(4, 3) << 2) + (x(12, 1) << 5) + (x(2, 2) << 6); }
-  int64_t rvc_ldsp_imm() { return (x(5, 2) << 3) + (x(12, 1) << 5) + (x(2, 3) << 6); }
-  int64_t rvc_swsp_imm() { return (x(9, 4) << 2) + (x(7, 2) << 6); }
-  int64_t rvc_sdsp_imm() { return (x(10, 3) << 3) + (x(7, 3) << 6); }
-  int64_t rvc_lw_imm() { return (x(6, 1) << 2) + (x(10, 3) << 3) + (x(5, 1) << 6); }
-  int64_t rvc_ld_imm() { return (x(10, 3) << 3) + (x(5, 2) << 6); }
-  int64_t rvc_j_imm() { return (x(3, 3) << 1) + (x(11, 1) << 4) + (x(2, 1) << 5) + (x(7, 1) << 6) + (x(6, 1) << 7) + (x(9, 2) << 8) + (x(8, 1) << 10) + (xs(12, 1) << 11); }
-  int64_t rvc_b_imm() { return (x(3, 2) << 1) + (x(10, 2) << 3) + (x(2, 1) << 5) + (x(5, 2) << 6) + (xs(12, 1) << 8); }
-  int64_t rvc_simm3() { return x(10, 3); }
-  uint64_t rvc_rd() { return rd(); }
-  uint64_t rvc_rs1() { return rd(); }
-  uint64_t rvc_rs2() { return x(2, 5); }
-  uint64_t rvc_rs1s() { return 8 + x(7, 3); }
-  uint64_t rvc_rs2s() { return 8 + x(2, 3); }
+  int64_t rvc_imm() const { return x(2, 5) + (xs(12, 1) << 5); }
+  int64_t rvc_zimm() const { return x(2, 5) + (x(12, 1) << 5); }
+  int64_t rvc_addi4spn_imm() const { return (x(6, 1) << 2) + (x(5, 1) << 3) + (x(11, 2) << 4) + (x(7, 4) << 6); }
+  int64_t rvc_addi16sp_imm() const { return (x(6, 1) << 4) + (x(2, 1) << 5) + (x(5, 1) << 6) + (x(3, 2) << 7) + (xs(12, 1) << 9); }
+  int64_t rvc_lwsp_imm() const { return (x(4, 3) << 2) + (x(12, 1) << 5) + (x(2, 2) << 6); }
+  int64_t rvc_ldsp_imm() const { return (x(5, 2) << 3) + (x(12, 1) << 5) + (x(2, 3) << 6); }
+  int64_t rvc_swsp_imm() const { return (x(9, 4) << 2) + (x(7, 2) << 6); }
+  int64_t rvc_sdsp_imm() const { return (x(10, 3) << 3) + (x(7, 3) << 6); }
+  int64_t rvc_lw_imm() const { return (x(6, 1) << 2) + (x(10, 3) << 3) + (x(5, 1) << 6); }
+  int64_t rvc_ld_imm() const { return (x(10, 3) << 3) + (x(5, 2) << 6); }
+  int64_t rvc_j_imm() const { return (x(3, 3) << 1) + (x(11, 1) << 4) + (x(2, 1) << 5) + (x(7, 1) << 6) + (x(6, 1) << 7) + (x(9, 2) << 8) + (x(8, 1) << 10) + (xs(12, 1) << 11); }
+  int64_t rvc_b_imm() const { return (x(3, 2) << 1) + (x(10, 2) << 3) + (x(2, 1) << 5) + (x(5, 2) << 6) + (xs(12, 1) << 8); }
+  int64_t rvc_simm3() const { return x(10, 3); }
+  uint64_t rvc_rd() const { return rd(); }
+  uint64_t rvc_rs1() const { return rd(); }
+  uint64_t rvc_rs2() const { return x(2, 5); }
+  uint64_t rvc_rs1s() const { return 8 + x(7, 3); }
+  uint64_t rvc_rs2s() const { return 8 + x(2, 3); }
 
-  uint64_t v_vm() { return x(25, 1); }
-  uint64_t v_wd() { return x(26, 1); }
-  uint64_t v_nf() { return x(29, 3); }
-  uint64_t v_simm5() { return xs(15, 5); }
-  uint64_t v_zimm5() { return x(15, 5); }
-  uint64_t v_zimm10() { return x(20, 10); }
-  uint64_t v_zimm11() { return x(20, 11); }
-  uint64_t v_lmul() { return x(20, 2); }
-  uint64_t v_frac_lmul() { return x(22, 1); }
-  uint64_t v_sew() { return 1 << (x(23, 3) + 3); }
-  uint64_t v_width() { return x(12, 3); }
-  uint64_t v_mop() { return x(26, 2); }
-  uint64_t v_lumop() { return x(20, 5); }
-  uint64_t v_sumop() { return x(20, 5); }
-  uint64_t v_vta() { return x(26, 1); }
-  uint64_t v_vma() { return x(27, 1); }
-  uint64_t v_mew() { return x(28, 1); }
+  uint64_t v_vm() const { return x(25, 1); }
+  uint64_t v_wd() const { return x(26, 1); }
+  uint64_t v_nf() const { return x(29, 3); }
+  uint64_t v_simm5() const { return xs(15, 5); }
+  uint64_t v_zimm5() const { return x(15, 5); }
+  uint64_t v_zimm10() const { return x(20, 10); }
+  uint64_t v_zimm11() const { return x(20, 11); }
+  uint64_t v_lmul() const { return x(20, 2); }
+  uint64_t v_frac_lmul() const { return x(22, 1); }
+  uint64_t v_sew() const { return 1 << (x(23, 3) + 3); }
+  uint64_t v_width() const { return x(12, 3); }
+  uint64_t v_mop() const { return x(26, 2); }
+  uint64_t v_lumop() const { return x(20, 5); }
+  uint64_t v_sumop() const { return x(20, 5); }
+  uint64_t v_vta() const { return x(26, 1); }
+  uint64_t v_vma() const { return x(27, 1); }
+  uint64_t v_mew() const { return x(28, 1); }
 
-  uint64_t p_imm2() { return x(20, 2); }
-  uint64_t p_imm3() { return x(20, 3); }
-  uint64_t p_imm4() { return x(20, 4); }
-  uint64_t p_imm5() { return x(20, 5); }
-  uint64_t p_imm6() { return x(20, 6); }
+  uint64_t p_imm2() const { return x(20, 2); }
+  uint64_t p_imm3() const { return x(20, 3); }
+  uint64_t p_imm4() const { return x(20, 4); }
+  uint64_t p_imm5() const { return x(20, 5); }
+  uint64_t p_imm6() const { return x(20, 6); }
 
 private:
   insn_bits_t b;
-  uint64_t x(int lo, int len) { return (b >> lo) & ((insn_bits_t(1) << len)-1); }
-  uint64_t xs(int lo, int len) { return int64_t(b) << (64-lo-len) >> (64-len); }
-  uint64_t imm_sign() { return xs(63, 1); }
+  uint64_t x(int lo, int len) const { return (b >> lo) & ((insn_bits_t(1) << len)-1); }
+  uint64_t xs(int lo, int len) const { return int64_t(b) << (64-lo-len) >> (64-len); }
+  uint64_t imm_sign() const { return xs(63, 1); }
 };
 
 template <class T, size_t N, bool zero_reg>
@@ -152,8 +154,10 @@ class regfile_t
 public:
   void write(size_t i, T value)
   {
-    if (!zero_reg || i != 0)
+    if (!zero_reg || i != 0) {
       data[i] = value;
+      trace[i].set(value);
+    }
   }
   const T& operator [] (size_t i) const
   {
@@ -167,6 +171,7 @@ public:
   {
     memset(data, 0, sizeof(data));
   }
+  std::array<vcd_tracer::sim_reg_value<T>, N> trace;
 private:
   T data[N];
 };
@@ -290,21 +295,23 @@ private:
 #define zext(x, pos) (((reg_t)(x) << (64-(pos))) >> (64-(pos)))
 #define zext_xlen(x) zext(x, xlen)
 
-#define set_pc(x) \
+#define set_pc(x, is_jump) \
   do { p->check_pc_alignment(x); \
+       STATE.trace_jump_branch_pc(x, is_jump); \
        npc = sext_xlen(x); \
      } while(0)
 
 #define set_pc_and_serialize(x) \
   do { reg_t __npc = (x) & p->pc_alignment_mask(); \
        npc = PC_SERIALIZE_AFTER; \
-       STATE.pc = __npc; \
+       STATE.write_pc( __npc); \
      } while(0)
 
 class wait_for_interrupt_t {};
 
 #define wfi() \
   do { set_pc_and_serialize(npc); \
+       STATE.start_wfi(); \
        npc = PC_SERIALIZE_WFI; \
        throw wait_for_interrupt_t(); \
      } while(0)

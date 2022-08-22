@@ -24,6 +24,8 @@
 #include <memory>
 #include <sys/types.h>
 
+#include "vcd_trace.h"
+
 class mmu_t;
 class remote_bitbang_t;
 
@@ -45,10 +47,15 @@ public:
         FILE *cmd_file); // needed for command line option --cmd
   ~sim_t();
 
+  void set_enable_vcd(std::string_view file_name);
+
   // run the simulation to completion
   int run();
   void set_debug(bool value);
   void set_histogram(bool value);
+  void set_max_cycles(unsigned long int max_cycles) {
+      end_cycle += max_cycles;
+  }
 
   // Configure logging
   //
@@ -86,6 +93,9 @@ private:
   std::unique_ptr<clint_t> clint;
   bus_t bus;
   log_file_t log_file;
+  vcd_tracer::top vcd_log{"riscv_isa_sim"};
+  std::string vcd_file{""};
+  std::ofstream vcd_out;
 
   FILE *cmd_file; // pointer to debug command input file
 
@@ -104,12 +114,15 @@ private:
   static const size_t INTERLEAVE = 5000;
   static const size_t INSNS_PER_RTC_TICK = 100; // 10 MHz clock for 1 BIPS core
   static const size_t CPU_HZ = 1000000000; // 1GHz CPU
+  size_t end_cycle{0}; // Units? Steps?
+  size_t total_steps{0};
   size_t current_step;
   size_t current_proc;
   bool debug;
   bool histogram_enabled; // provide a histogram of PCs
   bool log;
   remote_bitbang_t* remote_bitbang;
+  bool _interactive_echo;
 
   // memory-mapped I/O routines
   char* addr_to_mem(reg_t addr);
@@ -126,6 +139,7 @@ private:
   // functions that help implement interactive()
   void interactive_help(const std::string& cmd, const std::vector<std::string>& args);
   void interactive_quit(const std::string& cmd, const std::vector<std::string>& args);
+  void interactive_echo(const std::string& cmd, const std::vector<std::string>& args);
   void interactive_run(const std::string& cmd, const std::vector<std::string>& args, bool noisy);
   void interactive_run_noisy(const std::string& cmd, const std::vector<std::string>& args);
   void interactive_run_silent(const std::string& cmd, const std::vector<std::string>& args);
@@ -141,6 +155,8 @@ private:
   void interactive_until(const std::string& cmd, const std::vector<std::string>& args, bool noisy);
   void interactive_until_silent(const std::string& cmd, const std::vector<std::string>& args);
   void interactive_until_noisy(const std::string& cmd, const std::vector<std::string>& args);
+  void interactive_raise(const std::string& cmd, const std::vector<std::string>& args);
+  void interactive_trace(const std::string& cmd, const std::vector<std::string>& args);
   reg_t get_reg(const std::vector<std::string>& args);
   freg_t get_freg(const std::vector<std::string>& args);
   reg_t get_mem(const std::vector<std::string>& args);
@@ -164,6 +180,8 @@ private:
   size_t chunk_max_size() { return 8; }
   void set_target_endianness(memif_endianness_t endianness);
   memif_endianness_t get_target_endianness() const;
+
+  void elaborate(vcd_tracer::module &vcd_log);
 
 public:
   // Initialize this after procs, because in debug_module_t::reset() we

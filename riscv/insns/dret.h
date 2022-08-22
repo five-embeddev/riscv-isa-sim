@@ -1,4 +1,5 @@
 require(STATE.debug_mode);
+STATE.trace_jump_branch_pc(STATE.dpc->read(), true);
 set_pc_and_serialize(STATE.dpc->read());
 p->set_privilege(STATE.dcsr->prv);
 

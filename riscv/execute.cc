@@ -180,6 +180,7 @@ static inline reg_t execute_insn(processor_t* p, reg_t pc, insn_fetch_t fetch)
     npc = fetch.func(p, fetch.insn, pc);
     if (npc != PC_SERIALIZE_BEFORE) {
 
+      p->get_state()->trace_insn_word(fetch.insn);
 #ifdef RISCV_ENABLE_COMMITLOG
       if (p->get_log_commits_enabled()) {
         commit_log_print_insn(p, pc, fetch.insn);
@@ -232,26 +233,30 @@ void processor_t::step(size_t n)
     }
   }
 
+  vcd_tracer::trace_seq = 0;
   while (n > 0) {
     size_t instret = 0;
-    reg_t pc = state.pc;
+    reg_t pc = state.read_pc();
     mmu_t* _mmu = mmu;
 
-    #define advance_pc() \
-     if (unlikely(invalid_pc(pc))) { \
-       switch (pc) { \
-         case PC_SERIALIZE_BEFORE: state.serialized = true; break; \
-         case PC_SERIALIZE_AFTER: ++instret; break; \
-         case PC_SERIALIZE_WFI: n = ++instret; break; \
-         default: abort(); \
-       } \
-       pc = state.pc; \
-       break; \
-     } else { \
-       state.pc = pc; \
-       instret++; \
-     }
-
+#define advance_pc()                                               \
+    do {                                                           \
+        vcd_tracer::trace_seq ++;                                  \
+        if (unlikely(invalid_pc(pc))) {                            \
+            switch (pc) {                                               \
+            case PC_SERIALIZE_BEFORE: state.serialized = true; break;   \
+            case PC_SERIALIZE_AFTER: ++instret; break;                  \
+            case PC_SERIALIZE_WFI: n = ++instret; break;                \
+            default: abort();                                           \
+            }                                                           \
+            pc = state.read_pc();                                       \
+            break;                                                      \
+        } else {                                                        \
+            state.write_pc(pc);                                         \
+            instret++;                                                  \
+        }                                                               \
+    } while (false)
+    
     try
     {
       take_pending_interrupt();
@@ -293,7 +298,7 @@ void processor_t::step(size_t n)
           if (unlikely(instret + 1 == n))
             break;
           instret++;
-          state.pc = pc;
+          state.write_pc( pc);
         }
 
         advance_pc();
@@ -350,5 +355,6 @@ void processor_t::step(size_t n)
 
     state.minstret->bump(instret);
     n -= instret;
+
   }
 }
