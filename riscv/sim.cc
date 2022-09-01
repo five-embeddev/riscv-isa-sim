@@ -174,7 +174,6 @@ sim_t::~sim_t()
 
 void sim_t::set_enable_vcd(std::string_view file_name) {
     vcd_file = file_name;
-    elaborate(vcd_log.root);
 }
 
 void sim_t::elaborate(vcd_tracer::module &vcd_scope) {
@@ -199,9 +198,10 @@ void sim_t::main()
   if (!debug && log)
     set_procs_debug(true);
 
+  bool header_done = false;
+ 
   if (vcd_file != "") {      
       vcd_out.open(vcd_file.c_str(), std::ios_base::out);
-      vcd_log.finalize_header(vcd_out, std::chrono::system_clock::now());
   }
 
   while (!done())
@@ -235,6 +235,13 @@ int sim_t::run()
 
 void sim_t::step(size_t n)
 {
+
+  if (!vcd_finalized && (vcd_file != "")) {      
+      elaborate(vcd_log.root);
+      vcd_log.finalize_header(vcd_out, std::chrono::system_clock::now());
+      vcd_finalized = true;
+  }
+
   for (size_t i = 0, steps = 0; i < n; i += steps)
   {
     steps = std::min(n - i, INTERLEAVE - current_step);

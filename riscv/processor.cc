@@ -48,6 +48,11 @@ void state_t::elaborate(vcd_tracer::module &vcd_log_in) {
     bus_log.elaborate(trace_bus.rd_strobe, "rd_strobe");
     bus_log.elaborate(trace_bus.trace_size, "size");
 
+    vcd_tracer::module var_log(vcd_log_in, "vars");
+    for (auto &i : trace_bus._trace_vars) {
+        var_log.elaborate(*i.trace_var.get(), i.name);
+    }
+
   vcd_tracer::module csr_log(vcd_log_in, "csrs");
 
   csr_log.elaborate(misa->trace_value, "misa");
@@ -667,6 +672,9 @@ void state_t::reset(processor_t* const proc, reg_t max_isa)
   last_inst_xlen = 0;
   last_inst_flen = 0;
 #endif
+  
+  trace_bus.set_xlen(proc->get_const_xlen());
+
 }
 
 void processor_t::vectorUnit_t::reset(){

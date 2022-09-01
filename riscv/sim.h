@@ -95,6 +95,7 @@ private:
   log_file_t log_file;
   vcd_tracer::top vcd_log{"riscv_isa_sim"};
   std::string vcd_file{""};
+  bool vcd_finalized{false};
   std::ofstream vcd_out;
 
   FILE *cmd_file; // pointer to debug command input file

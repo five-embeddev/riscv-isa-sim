@@ -59,6 +59,7 @@ riscv_srcs = \
 	remote_bitbang.cc \
 	jtag_dtm.cc \
 	csrs.cc \
+    trace_bus.cc \
 	$(riscv_gen_srcs) \
 
 riscv_test_srcs =

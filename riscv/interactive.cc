@@ -316,6 +316,13 @@ void sim_t::interactive_run_silent(const std::string& cmd, const std::vector<std
 
 void sim_t::interactive_run(const std::string& cmd, const std::vector<std::string>& args, bool noisy)
 {
+
+  if (!vcd_finalized && (vcd_file != "")) {      
+      elaborate(vcd_log.root);
+      vcd_log.finalize_header(vcd_out, std::chrono::system_clock::now());
+      vcd_finalized = true;
+  }
+
   size_t steps = args.size() ? atoll(args[0].c_str()) : -1;
   ctrlc_pressed = false;
   set_procs_debug(noisy);

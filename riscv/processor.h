@@ -57,23 +57,9 @@ typedef std::vector<std::tuple<reg_t, uint64_t, uint8_t>> commit_log_mem_t;
 
 class trace_location_t {
 public:
-    trace_location_t(const std::string &name, reg_t addr, int size) 
-        : name(name)
-        , addr(addr)
-        , size(size)
-        , mask(size==sizeof(reg_t) ? -1 : ((1<<(size*8))-1))
-        {
-        }
-    void trace(std::ostream &out, reg_t wr_addr, reg_t wr_val, int wr_size) const  {
-        reg_t offset = wr_addr - addr;
-        wr_val >>= offset*8;
-        wr_val &= mask;
-        out << "TRACE: " << name << "@0x" << std::hex << addr << "= 0x" << wr_val << std::dec << "\n";
-    }
-    bool cmplt(reg_t test_addr) const {
-        return test_addr < addr;
-    }
-private:
+    trace_location_t(const std::string &name, reg_t addr, int size);
+    void trace(std::ostream &out, reg_t wr_addr, reg_t wr_val, int wr_size);
+    std::unique_ptr<vcd_tracer::value_base> trace_var;
     std::string name;
     reg_t addr;
     int size;
@@ -83,59 +69,20 @@ private:
 // Trace memory access like a memory bs
 struct trace_bus_t {
     trace_bus_t(std::ostream &sout) 
-        : sout(sout) {
+        : sout(sout)
+        , addr_mask(-1) {
     }
-    void clear_strobe(void) {
-        if (wr_strobe_cnt > 0) {
-            wr_strobe_cnt --;
-            if (wr_strobe_cnt == 0) {
-                wr_strobe.set(false);
-            }
-        }
-        if (rd_strobe_cnt > 0) {
-            rd_strobe_cnt --;
-            if (rd_strobe_cnt == 0) {
-                rd_strobe.set(false);
-            }
-        }
-    }
-    void mem_write( reg_t addr, uint64_t val, uint8_t size) {
-        trace_addr.set(addr);
-        trace_wr_data.set(val);
-        trace_size.set(size);
-        wr_strobe.set(true);
-        wr_strobe_cnt ++;
-        auto i = std::lower_bound(_trace_vars.begin(),
-                                  _trace_vars.end(),
-                                  addr,
-                                  [](const trace_location_t &var, reg_t addr) {
-                                      return var.cmplt(addr);
-                                      
-                                  });
-        while (i!=_trace_vars.end() && (i->cmplt((addr + size)))) {
-            i->trace(sout, addr, val, size);
-            i++;
-        }
-    }
-    void mem_read( reg_t addr, uint64_t val, uint8_t size) {
-        trace_addr.set(addr);
-        trace_rd_data.set(val);
-        trace_size.set(size);
-        rd_strobe.set(true);
-        rd_strobe_cnt ++;
-    }
-    void add_trace(const std::string &name, reg_t addr, int size) {
-        auto i = std::lower_bound(_trace_vars.begin(),
-                                  _trace_vars.end(),
-                                  addr,
-                                  [](const trace_location_t &x, reg_t addr) {
-                                      return x.cmplt(addr);
-                                  });
-        _trace_vars.emplace(i, name, addr, size);
-    }
+    void clear_strobe(void);
+    void mem_write( reg_t addr, uint64_t val, uint8_t size);
+    void mem_read( reg_t addr, uint64_t val, uint8_t size);
+    void add_trace(const std::string &name, reg_t addr, int size);
 
     std::ostream &sout;
-    
+    reg_t addr_mask;
+    void set_xlen(unsigned xlen) {
+        addr_mask = xlen == 32 ? 0xFFFFFFFFul : -1;
+    }
+
     vcd_tracer::sim_pc_value<reg_t> trace_addr;
     vcd_tracer::sim_pc_value<bool> wr_strobe;
     vcd_tracer::sim_pc_value<bool> rd_strobe;
