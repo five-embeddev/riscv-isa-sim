@@ -5,3 +5,9 @@ autom4te.cache/
 *.o
 *.d
 .gdb_history
+*.a
+*.so
+*~
+
+*.mk
+*.cc
