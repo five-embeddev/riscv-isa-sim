@@ -236,7 +236,7 @@ void sim_t::interactive_help(const std::string& cmd, const std::vector<std::stri
     "rs [count]                      # Resume silent execution (until CTRL+C, or [count] insns)\n"
     "interrupt <core>  <raise|clear> [mei|mti|msi]   # Raise an interrupt (without using CLINT/PLINT)\n"
     "trace <name> <addr> <size>      # Trace a memory address\n"
-    "trace <var>                     # Trace a variable\n"
+    "trace <var> [uint|real]         # Trace a variable <var>, unsigned integer (default) or real value\n"
     "quit                            # End the simulation\n"
     "q                                 Alias for quit\n"
     "help                            # This screen!\n"
@@ -246,12 +246,16 @@ void sim_t::interactive_help(const std::string& cmd, const std::vector<std::stri
 }
 
 void sim_t::interactive_trace(const std::string& cmd, const std::vector<std::string>& args) {
-    if (args.size()==1) {
+    bool trace_as_real = false;
+    if ((args.size()==1) || (args.size()==2)) {
         // TODO - Trace VAR name
         const auto &name = args[0];
         elf_symbol_t sym = get_addr(name);
+        if (args.size()==2) {
+            trace_as_real = (args[1] == "real");
+        }
         for (auto &p : procs) {
-            p->get_state()->trace_bus.add_trace(name, sym.addr, sym.size);
+            p->get_state()->trace_bus.add_trace(name, sym.addr, sym.size, trace_as_real);
         }
         std::ostream out(sout_.rdbuf());
         out << "Tracing " << name << ", " << sym.size << "bytes @" << std::hex << "0x" 
@@ -263,7 +267,7 @@ void sim_t::interactive_trace(const std::string& cmd, const std::vector<std::str
         reg_t addr = strtoul(args[1].c_str(), nullptr, 0);
         reg_t size = strtoul(args[2].c_str(), nullptr, 0);
         for (auto &p : procs) {
-            p->get_state()->trace_bus.add_trace(name, addr, size);
+            p->get_state()->trace_bus.add_trace(name, addr, size, trace_as_real);
         }
     } else {
         throw trap_interactive();
@@ -637,7 +641,8 @@ void sim_t::interactive_until(const std::string& cmd, const std::vector<std::str
   reg_t val;
   elf_symbol_t sym = get_addr(args[args.size()-1]);
   if (sym.size == 0) {
-      val = strtol(args[args.size()-1].c_str(),&end,16);
+
+     val = strtol(args[args.size()-1].c_str(),&end,16);
       if (val == LONG_MAX)
           val = strtoul(args[args.size()-1].c_str(),&end,16);
       if (args[args.size()-1].c_str() == end)  // not a valid number
@@ -645,6 +650,7 @@ void sim_t::interactive_until(const std::string& cmd, const std::vector<std::str
   } else {
       val = sym.addr;
   }
+
 
   // mask bits above max_xlen
   int max_xlen = procs[strtol(args[1].c_str(),NULL,10)]->get_max_xlen();
@@ -657,6 +663,12 @@ void sim_t::interactive_until(const std::string& cmd, const std::vector<std::str
               args[0] == "pc"  ? &sim_t::get_pc :
               args[0] == "mem" ? &sim_t::get_mem :
               NULL;
+
+  if (_interactive_echo) {
+      std::ostream out(sout_.rdbuf());
+      out << "Run until " << args[0] 
+          << " == 0x" << std::hex << val << std::dec << "\n";
+  }
 
   if (func == NULL)
     throw trap_interactive();

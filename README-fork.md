@@ -27,7 +27,7 @@ New Interpreter Commands
 echo <on|off>
 interrupt <core>  <raise|clear> [mei|mti|msi] 
 trace <name> <addr> <size> 
-trace <var>                
+trace <var> [uint|real]
 ~~~
 
 ### echo <on|off>
@@ -52,9 +52,11 @@ Any bus access to the given address will be reported to the console.
 The variable will be traced to the VCD log file if the trace command
 is issued before the simulation is started.
 
-### trace <var>                
+### trace <var> [uint|real]
 
 Trace a variable. The symbol will be looked up and traced according to the above command.
+
+By default traced as unsigned integer. If "real" specified then traced as float or double depending on size of variable in elf.
 
 VCD Logging
 -----------

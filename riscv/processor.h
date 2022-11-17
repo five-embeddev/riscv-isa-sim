@@ -57,13 +57,15 @@ typedef std::vector<std::tuple<reg_t, uint64_t, uint8_t>> commit_log_mem_t;
 
 class trace_location_t {
 public:
-    trace_location_t(const std::string &name, reg_t addr, int size);
+    trace_location_t(const std::string &name, reg_t addr, int size, bool trace_as_real);
     void trace(std::ostream &out, reg_t wr_addr, reg_t wr_val, int wr_size);
     std::unique_ptr<vcd_tracer::value_base> trace_var;
     std::string name;
     reg_t addr;
     int size;
     reg_t mask;
+    reg_t value;
+    bool trace_as_real;
 };
 
 // Trace memory access like a memory bs
@@ -75,7 +77,7 @@ struct trace_bus_t {
     void clear_strobe(void);
     void mem_write( reg_t addr, uint64_t val, uint8_t size);
     void mem_read( reg_t addr, uint64_t val, uint8_t size);
-    void add_trace(const std::string &name, reg_t addr, int size);
+    void add_trace(const std::string &name, reg_t addr, int size, bool trace_as_real);
 
     std::ostream &sout;
     reg_t addr_mask;
