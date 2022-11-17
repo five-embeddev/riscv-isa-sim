@@ -25,22 +25,30 @@ namespace vcd_tracer {
     template<typename T> using sim_reg_value = value<T, vcd_tracer::bit_size<T>::value, REG_TRACE_DEPTH, &trace_seq>;
     template<typename T> using sim_csr_value = value<T, vcd_tracer::bit_size<T>::value, CSR_TRACE_DEPTH, &trace_seq>;
 
-    static std::unique_ptr<vcd_tracer::value_base> make_value(int size_bytes) {
-        switch (size_bytes) {
-        case 1:
-            return std::make_unique<sim_reg_value<uint8_t>>();
-        case 2:
-            return std::make_unique<sim_reg_value<uint16_t>>();
-        case 3:
-        case 4:
-            return std::make_unique<sim_reg_value<uint32_t>>();
-        case 5:
-        case 6:
-        case 7:
-        case 8:
+    static std::unique_ptr<vcd_tracer::value_base> make_value(int size_bytes, bool trace_as_real) {
+        if (trace_as_real) {
+            if (size_bytes == 8) {
+                return std::make_unique<sim_reg_value<double>>();
+            } else {
+                return std::make_unique<sim_reg_value<float>>();
+            }
+        } else {
+            switch (size_bytes) {
+            case 1:
+                return std::make_unique<sim_reg_value<uint8_t>>();
+            case 2:
+                return std::make_unique<sim_reg_value<uint16_t>>();
+            case 3:
+            case 4:
+                return std::make_unique<sim_reg_value<uint32_t>>();
+            case 5:
+            case 6:
+            case 7:
+            case 8:
+                return std::make_unique<sim_reg_value<uint64_t>>();
+            }
             return std::make_unique<sim_reg_value<uint64_t>>();
         }
-        return std::make_unique<sim_reg_value<uint64_t>>();
     }
 }
 
