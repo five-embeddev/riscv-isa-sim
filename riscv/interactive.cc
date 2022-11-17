@@ -139,6 +139,7 @@ void sim_t::interactive()
   funcs["echo"] = &sim_t::interactive_echo;
   funcs["interrupt"] = &sim_t::interactive_raise;
   funcs["trace"] = &sim_t::interactive_trace;
+  funcs["set"] = &sim_t::interactive_set;
 
   funcs["q"] = funcs["quit"];
   funcs["help"] = &sim_t::interactive_help;
@@ -237,6 +238,7 @@ void sim_t::interactive_help(const std::string& cmd, const std::vector<std::stri
     "interrupt <core>  <raise|clear> [mei|mti|msi]   # Raise an interrupt (without using CLINT/PLINT)\n"
     "trace <name> <addr> <size>      # Trace a memory address\n"
     "trace <var> [uint|real]         # Trace a variable <var>, unsigned integer (default) or real value\n"
+    "set [<core>] <var> <value>      # Set a variable <var>, unsigned integer (default) to an integer value\n"
     "quit                            # End the simulation\n"
     "q                                 Alias for quit\n"
     "help                            # This screen!\n"
@@ -582,6 +584,59 @@ reg_t sim_t::get_mem(const std::vector<std::string>& args)
   return val;
 }
 
+reg_t sim_t::set_symbol(const std::vector<std::string>& args)
+{
+  if (!((args.size() == 2) || (args.size() == 3))) {
+    throw trap_interactive();
+  }
+
+  std::string addr_str;
+  std::string value_str;
+
+  mmu_t* mmu = debug_mmu;
+  if (args.size() == 3)
+  {
+    processor_t *p = get_core(args[0]);
+    mmu = p->get_mmu();
+    addr_str = args[1];
+    value_str = args[2];
+  }  else {
+    addr_str = args[0];
+    value_str = args[1];
+  }
+
+  elf_symbol_t sym_addr = get_addr(addr_str);
+  if (sym_addr.size == 0) {
+      // symbol not found
+      throw trap_interactive();
+  }
+
+  reg_t val = strtoul(value_str.c_str(), nullptr, 0);
+  switch(sym_addr.size)
+  {
+    case 0:
+      mmu->store_uint64(sym_addr.addr, val);
+      val = mmu->load_uint64(sym_addr.addr);
+      break;
+    case 4:
+      mmu->store_uint32(sym_addr.addr, val);
+      val = mmu->load_uint32(sym_addr.addr);
+      break;
+    case 2:
+    case 6:
+      mmu->store_uint16(sym_addr.addr, val);
+      val = mmu->load_uint16(sym_addr.addr);
+      break;
+    default:
+      mmu->store_uint8(sym_addr.addr, val);
+      val = mmu->load_uint8(sym_addr.addr);
+      break;
+  }
+  return val;
+}
+
+
+
 void sim_t::interactive_mem(const std::string& cmd, const std::vector<std::string>& args)
 {
   int max_xlen = procs[0]->get_max_xlen();
@@ -589,6 +644,16 @@ void sim_t::interactive_mem(const std::string& cmd, const std::vector<std::strin
   std::ostream out(sout_.rdbuf());
   out << std::hex << "0x" << std::setfill('0') << std::setw(max_xlen/4)
       << zext(get_mem(args), max_xlen) << std::endl;
+}
+
+
+void sim_t::interactive_set(const std::string& cmd, const std::vector<std::string>& args)
+{
+  int max_xlen = procs[0]->get_max_xlen();
+
+  std::ostream out(sout_.rdbuf());
+  out << std::hex << "0x" << std::setfill('0') << std::setw(max_xlen/4)
+      << zext(set_symbol(args), max_xlen) << std::endl;
 }
 
 void sim_t::interactive_str(const std::string& cmd, const std::vector<std::string>& args)

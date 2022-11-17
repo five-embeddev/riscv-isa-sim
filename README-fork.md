@@ -28,6 +28,7 @@ echo <on|off>
 interrupt <core>  <raise|clear> [mei|mti|msi] 
 trace <name> <addr> <size> 
 trace <var> [uint|real]
+set [<core>] <name> <value>
 ~~~
 
 ### echo <on|off>
@@ -57,6 +58,11 @@ is issued before the simulation is started.
 Trace a variable. The symbol will be looked up and traced according to the above command.
 
 By default traced as unsigned integer. If "real" specified then traced as float or double depending on size of variable in elf.
+
+### set [<core>] <name> <value>
+
+Set a variable. The value will be set as an unsigned integer.
+
 
 VCD Logging
 -----------
