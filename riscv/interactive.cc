@@ -20,7 +20,7 @@
 #include <algorithm>
 #include <math.h>
 
-#define MAX_CMD_STR 40 // maximum possible size of a command line
+#define MAX_CMD_STR 80 // maximum possible size of a command line
 
 #define STR_(X) #X      // these definitions allow to use a macro as a string
 #define STR(X) STR_(X)
