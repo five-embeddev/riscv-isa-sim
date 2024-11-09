@@ -591,7 +591,6 @@ void mip_or_mie_csr_t::trace_update(const reg_t val) noexcept {
     trace_mti.set((val & MIP_MTIP)!=0);
     trace_msi.set((val & MIP_MSIP)!=0);
     bool mei_flag = (val & MIP_MEIP)!=0;
-    std::cerr << "MEI = " << mei_flag << "\n";
     trace_mei.set(mei_flag);
 }
 

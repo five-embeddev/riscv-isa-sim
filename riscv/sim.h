@@ -48,6 +48,9 @@ public:
   ~sim_t();
 
   void set_enable_vcd(std::string_view file_name);
+  void set_trace_vars(const std::vector<std::string> &t) {
+    trace_vars = t;
+  }
 
   // run the simulation to completion
   int run();
@@ -97,6 +100,7 @@ private:
   std::string vcd_file{""};
   bool vcd_finalized{false};
   std::ofstream vcd_out;
+  std::vector<std::string> trace_vars;
 
   FILE *cmd_file; // pointer to debug command input file
 

@@ -74,6 +74,7 @@ static void help(int exit_code = 1)
   fprintf(stderr, "  --dm-no-impebreak     Debug module won't support implicit ebreak in program buffer\n");
   fprintf(stderr, "  --vcd-log=<file>      Log VCD to this file.\n");
   fprintf(stderr, "  --max-cycles=<cycle count>      Limit simulation to this number of cycles.\n");
+  fprintf(stderr, "  --trace-var=<name>    Trace var to vcd.\n");
 
   exit(exit_code);
 }
@@ -256,6 +257,7 @@ int main(int argc, char** argv)
     .support_impebreak = true
   };
   std::vector<int> hartids;
+  std::vector<std::string> trace_vars;
 
   auto const hartids_parser = [&](const char *s) {
     std::string const str(s);
@@ -377,6 +379,8 @@ int main(int argc, char** argv)
                 [&](const char* s){vcd_log_path = s;});
   parser.option(0, "max-cycles", 1,
                 [&](const char* s){max_cycles = atoul_safe(s);});
+  parser.option(0, "trace-var", 1,
+                [&](const char* s){trace_vars.push_back(s);});
   FILE *cmd_file = NULL;
   parser.option(0, "debug-cmd", 1, [&](const char* s){
      if ((cmd_file = fopen(s, "r"))==NULL) {
@@ -458,8 +462,9 @@ int main(int argc, char** argv)
   }
   if (vcd_log_path) {
       s.set_enable_vcd(vcd_log_path);
+      s.set_trace_vars(trace_vars);
   }
-
+  
   if (dump_dts) {
     printf("%s", s.get_dts());
     return 0;

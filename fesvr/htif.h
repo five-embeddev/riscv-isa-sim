@@ -54,6 +54,10 @@ class htif_t : public chunked_memif_t
 #endif
   }
 
+  // Given an address, return symbol from addr2symbol map
+  const char* get_symbol(uint64_t addr);
+  elf_symbol_t get_addr(const std::string &name );
+  
  protected:
   virtual void reset() = 0;
 
@@ -76,9 +80,6 @@ class htif_t : public chunked_memif_t
   // range to memory, because it has already been loaded through a sideband
   virtual bool is_address_preloaded(addr_t taddr, size_t len) { return false; }
 
-  // Given an address, return symbol from addr2symbol map
-  const char* get_symbol(uint64_t addr);
-  elf_symbol_t get_addr(const std::string &name );
 
  private:
   void parse_arguments(int argc, char ** argv);

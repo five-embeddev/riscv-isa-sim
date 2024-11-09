@@ -204,6 +204,17 @@ void sim_t::main()
       vcd_out.open(vcd_file.c_str(), std::ios_base::out);
   }
 
+  if (!trace_vars.empty()) {
+    set_procs_debug(true);
+    for (auto v : trace_vars) {
+      elf_symbol_t sym = get_addr(v);
+      std::cout << "TRACE: " << v << " @ " <<   sym.addr <<  ", " << sym.size << "\n";
+      for (unsigned int i=0; i< nprocs(); i++) {
+        get_core(i)->get_state()->trace_bus.add_trace(v, sym.addr, sym.size, false);      
+      }
+    }
+  }
+  
   while (!done())
   {
     if (debug || ctrlc_pressed)
